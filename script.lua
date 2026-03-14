@@ -1,70 +1,146 @@
---// SERVICES
-local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
+-- // الإعدادات العامة
+_G.ESP_Toggle = true
+_G.Hitbox_Toggle = true
+_G.Reach_Size = 25
 
-local player = Players.LocalPlayer
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
---// التبديلات البرمجية (Toggles)
-_G.ESP_Enabled = false
-_G.Radar_Enabled = false
-_G.Hitbox_Enabled = false
-_G.Tracers_Enabled = false
-
--- تنظيف أي نسخة قديمة
+-- // تنظيف أي سكريبت قديم
 if CoreGui:FindFirstChild("SuriHub") then CoreGui.SuriHub:Destroy() end
 
---// SCREEN GUI
+-- // 1. إنشاء الواجهة (GUI)
 local sg = Instance.new("ScreenGui", CoreGui)
 sg.Name = "SuriHub"
 
---// MAIN FRAME
-local main = Instance.new("Frame", sg)
-main.Size = UDim2.new(0,320,0,360)
-main.Position = UDim2.new(0.5,-160,0.5,-180)
-main.BackgroundColor3 = Color3.fromRGB(18,18,18)
-main.Visible = true
-Instance.new("UICorner",main).CornerRadius = UDim.new(0,8)
+local frame = Instance.new("Frame", sg)
+frame.Size = UDim2.new(0, 180, 0, 160)
+frame.Position = UDim2.new(0, 50, 0.4, 0)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+frame.Active = true
+frame.Draggable = true
 
---// TOP BAR
-local top = Instance.new("Frame", main)
-top.Size = UDim2.new(1,0,0,40)
-top.BackgroundColor3 = Color3.fromRGB(25,25,25)
-Instance.new("UICorner",top)
+local corner = Instance.new("UICorner", frame)
 
-local title = Instance.new("TextLabel", top)
-title.Size = UDim2.new(1,0,1,0)
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Text = "Suri Ultimate Hub"
+title.TextColor3 = Color3.new(1, 1, 1)
 title.BackgroundTransparency = 1
-title.Text = "SURI TACTICAL V3"
-title.Font = Enum.Font.GothamBold
-title.TextSize = 18
-title.TextColor3 = Color3.new(1,1,1)
 
---// RADAR GUI (الرادار الدائري)
-local radar = Instance.new("Frame", sg)
-radar.Size = UDim2.new(0,140,0,140)
-radar.Position = UDim2.new(0,20,0,100)
-radar.BackgroundColor3 = Color3.new(0,0,0)
-radar.BackgroundTransparency = 0.4
-radar.Visible = false
-Instance.new("UICorner", radar).CornerRadius = UDim.new(1,0)
-local stroke = Instance.new("UIStroke", radar)
-stroke.Color = Color3.new(0,1,0)
+local function createBtn(text, pos, callback)
+    local btn = Instance.new("TextButton", frame)
+    btn.Size = UDim2.new(0.8, 0, 0, 30)
+    btn.Position = pos
+    btn.Text = text
+    btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    Instance.new("UICorner", btn)
+    btn.MouseButton1Click:Connect(callback)
+    return btn
+end
 
---// BUTTON AREA
-local container = Instance.new("Frame", main)
-container.Position = UDim2.new(0,10,0,50)
-container.Size = UDim2.new(1,-20,1,-60)
-container.BackgroundTransparency = 1
-local layout = Instance.new("UIListLayout",container)
-layout.Padding = UDim.new(0,8)
+local espBtn = createBtn("ESP: ON", UDim2.new(0.1, 0, 0.25, 0), function()
+    _G.ESP_Toggle = not _G.ESP_Toggle
+end)
 
---// وظيفة إنشاء الأزرار مع الربط
-local function createButton(text, callback)
-    local btn = Instance.new("TextButton", container)
-    btn.Size = UDim2.new(1,0,0,45)
+local hitBtn = createBtn("Hitbox: ON", UDim2.new(0.1, 0, 0.55, 0), function()
+    _G.Hitbox_Toggle = not _G.Hitbox_Toggle
+end)
+
+-- // 2. نظام الـ ESP المتكامل (Highlight + Name + Distance + Tracers)
+local function addESP(player)
+    if player == LocalPlayer then return end
+
+    local function apply()
+        local char = player.Character or player.CharacterAdded:Wait()
+        local root = char:WaitForChild("HumanoidRootPart", 10)
+        
+        -- التوهج (Highlight)
+        local hl = Instance.new("Highlight", char)
+        hl.Name = "SuriHL"
+        hl.FillColor = Color3.fromRGB(255, 0, 0)
+        hl.OutlineColor = Color3.new(1, 1, 1)
+
+        -- الاسم والمسافة (Billboard)
+        local bb = Instance.new("BillboardGui", char:WaitForChild("Head"))
+        bb.Name = "SuriBB"
+        bb.AlwaysOnTop = true
+        bb.Size = UDim2.new(0, 100, 0, 50)
+        bb.StudsOffset = Vector3.new(0, 3, 0)
+        local lbl = Instance.new("TextLabel", bb)
+        lbl.Size = UDim2.new(1, 0, 1, 0)
+        lbl.BackgroundTransparency = 1
+        lbl.TextColor3 = Color3.new(1, 1, 1)
+        lbl.Font = Enum.Font.GothamBold
+
+        -- الخطوط (Tracers)
+        local line = Drawing.new("Line")
+        line.Color = Color3.new(1, 1, 1)
+        line.Thickness = 1
+
+        RunService.RenderStepped:Connect(function()
+            if char and char:FindFirstChild("HumanoidRootPart") and _G.ESP_Toggle then
+                hl.Enabled = true
+                bb.Enabled = true
+                local dist = math.floor((root.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude)
+                lbl.Text = player.Name .. "\n[" .. dist .. "m]"
+                
+                local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
+                if onScreen then
+                    line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                    line.To = Vector2.new(pos.X, pos.Y)
+                    line.Visible = true
+                else
+                    line.Visible = false
+                end
+            else
+                hl.Enabled = false
+                bb.Enabled = false
+                line.Visible = false
+            end
+        end)
+    end
+    apply()
+    player.CharacterAdded:Connect(apply)
+end
+
+-- // 3. الهيت بوكس الدقيق (Hitbox)
+RunService.RenderStepped:Connect(function()
+    if not _G.Hitbox_Toggle then return end
+    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if not tool then return end
+    
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local targetRoot = p.Character.HumanoidRootPart
+            local dist = (targetRoot.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+            
+            if dist <= _G.Reach_Size then
+                local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart")
+                if handle and firetouchinterest then
+                    firetouchinterest(handle, targetRoot, 0)
+                    firetouchinterest(handle, targetRoot, 1)
+                end
+            end
+        end
+    end
+end)
+
+-- تشغيل النظام للجميع
+for _, p in pairs(Players:GetPlayers()) do addESP(p) end
+Players.PlayerAdded:Connect(addESP)
+
+-- تحديث ألوان الأزرار
+spawn(function()
+    while task.wait(0.1) do
+        espBtn.BackgroundColor3 = _G.ESP_Toggle and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+        hitBtn.BackgroundColor3 = _G.Hitbox_Toggle and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+    end
+end)
     btn.BackgroundColor3 = Color3.fromRGB(35,35,35)
     btn.TextColor3 = Color3.new(1,1,1)
     btn.Text = text .. ": OFF"
